@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeGuard AI &ndash; Worker Safety Monitoring</title>
+  <meta name="description" content="Real-time AI-powered worker safety monitoring with PPE detection, smoking detection, and live violation alerts." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+
+<!-- ═══════════════════════════ PARTICLE BG ═════════════════════════════ -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- ═══════════════════════════ TOP NAVBAR ══════════════════════════════ -->
+<nav class="navbar" id="navbar">
+  <div class="nav-brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <path d="M9 12l2 2 4-4"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <span class="brand-name">SafeGuard<span class="brand-ai"> AI</span></span>
+      <span class="brand-sub">Industrial Safety Monitoring System</span>
+    </div>
+  </div>
+
+  <div class="nav-center">
+    <div class="model-badge" id="badge-ppe">
+      <span class="badge-dot {% if ppe_model_ok %}dot-ok{% else %}dot-err{% endif %}"></span>
+      <span>PPE Model</span>
+    </div>
+    <div class="model-badge" id="badge-smoke">
+      <span class="badge-dot {% if smoking_model_ok %}dot-ok{% else %}dot-err{% endif %}"></span>
+      <span>Smoking Model</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="status-pill" id="global-status">
+      <span class="status-dot"></span>
+      <span id="status-pill-text">IDLE</span>
+    </div>
+  </div>
+
+  <div class="nav-actions">
+    <button class="nav-btn" id="btn-voice" title="Toggle Voice Alerts">
+      <svg id="icon-voice-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+      </svg>
+      <svg id="icon-voice-off" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <line x1="23" y1="9" x2="17" y2="15"/>
+        <line x1="17" y1="9" x2="23" y2="15"/>
+      </svg>
+    </button>
+    <button class="nav-btn" id="btn-fullscreen" title="Toggle Fullscreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+      </svg>
+    </button>
+    <a href="/download_report" class="nav-btn" title="Download CSV Report">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════ STAT CARDS ═══════════════════════════════ -->
+<section class="stats-strip" id="stats-grid">
+
+  <div class="stat-card" id="card-persons">
+    <div class="stat-icon-wrap icon-blue">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-number" id="stat-persons">0</div>
+      <div class="stat-label">Total Persons</div>
+    </div>
+    <div class="stat-trend" id="trend-persons"></div>
+  </div>
+
+  <div class="stat-card danger-card" id="card-helmet">
+    <div class="stat-icon-wrap icon-red">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2a9 9 0 0 1 9 9c0 3.87-1.5 7-4 9H7c-2.5-2-4-5.13-4-9a9 9 0 0 1 9-9z"/>
+        <path d="M3 13h18"/>
+      </svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-number text-red" id="stat-helmet">0</div>
+      <div class="stat-label">Helmet Violations</div>
+    </div>
+    <div class="stat-trend" id="trend-helmet"></div>
+  </div>
+
+  <div class="stat-card warning-card" id="card-vest">
+    <div class="stat-icon-wrap icon-yellow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+      </svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-number text-yellow" id="stat-vest">0</div>
+      <div class="stat-label">Vest Violations</div>
+    </div>
+    <div class="stat-trend" id="trend-vest"></div>
+  </div>
+
+  <div class="stat-card smoke-card" id="card-smoking">
+    <div class="stat-icon-wrap icon-orange">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M18 12H2"/>
+        <path d="M18 6c0-3.3 2.7-4 4-4"/>
+        <path d="M22 12v4"/>
+        <path d="M7 12v4"/>
+        <path d="M18 18H2"/>
+      </svg>
+    </div>
+    <div class="stat-info">
+      <div class="stat-number text-orange" id="stat-smoking">0</div>
+      <div class="stat-label">Smoking Detected</div>
+    </div>
+    <div class="stat-trend" id="trend-smoking"></div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════ MAIN LAYOUT ══════════════════════════════ -->
+<main class="dashboard">
+
+  <!-- ─── LEFT: Feed Panel ────────────────────────────────── -->
+  <section class="feed-panel">
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab active" id="tab-cam" data-tab="cam">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        Live Camera
+      </button>
+      <button class="tab" id="tab-image" data-tab="image">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        Image
+      </button>
+      <button class="tab" id="tab-video" data-tab="video">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Video
+      </button>
+      <div class="tab-spacer"></div>
+      <div class="live-indicator" id="live-indicator">
+        <span class="live-dot"></span> LIVE
+      </div>
+    </div>
+
+    <!-- ── Webcam Pane ──────────────────────────────── -->
+    <div class="tab-content active" id="pane-cam">
+      <div class="feed-container" id="feed-container">
+        <img id="webcam-stream" src="/video_feed" alt="Live Camera Feed" />
+        <div class="feed-overlay" id="feed-overlay">
+          <div class="overlay-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+            </svg>
+          </div>
+          <p class="overlay-title">Camera is Off</p>
+          <p class="overlay-hint">Click <strong>Start Camera</strong> to begin monitoring</p>
+        </div>
+        <!-- HUD badges -->
+        <div class="hud-fps" id="fps-badge">FPS: --</div>
+        <div class="hud-time" id="ts-badge">--:--:--</div>
+        <div class="hud-status" id="hud-status">IDLE</div>
+        <!-- Scan line animation (active only when camera is on) -->
+        <div class="scan-line" id="scan-line"></div>
+      </div>
+
+      <div class="cam-controls">
+        <button class="btn btn-start" id="btn-start">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start Camera
+        </button>
+        <button class="btn btn-stop" id="btn-stop" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12"/></svg>
+          Stop Camera
+        </button>
+        <button class="btn btn-shot" id="btn-screenshot" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Screenshot
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Image Pane ───────────────────────────────── -->
+    <div class="tab-content" id="pane-image">
+      <div class="upload-zone" id="img-dropzone">
+        <div class="upload-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p class="upload-title">Drop image here or click to browse</p>
+        <p class="upload-sub">Supports: PNG, JPG, JPEG, BMP, WEBP</p>
+        <input type="file" id="img-input" accept="image/*" style="display:none" />
+        <button class="btn btn-start btn-upload" id="btn-img-browse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Browse Image
+        </button>
+      </div>
+
+      <div class="processing-overlay" id="img-loading" style="display:none">
+        <div class="ai-loader">
+          <div class="ai-ring"></div>
+          <div class="ai-core">AI</div>
+        </div>
+        <p>Running Detection Models...</p>
+      </div>
+
+      <div class="result-pane" id="img-result" style="display:none">
+        <div class="result-toolbar">
+          <h3>Detection Result</h3>
+          <div class="result-actions">
+            <button class="btn-icon-sm" id="btn-img-download" title="Download processed image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download
+            </button>
+            <button class="btn-icon-sm btn-reset" id="btn-img-reset" title="Upload new image">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+              Reset
+            </button>
+          </div>
+        </div>
+        <img id="img-result-display" alt="Processed image" />
+        <div class="violation-chips" id="img-violation-summary"></div>
+      </div>
+    </div>
+
+    <!-- ── Video Pane ───────────────────────────────── -->
+    <div class="tab-content" id="pane-video">
+      <div class="upload-zone" id="vid-dropzone">
+        <div class="upload-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <polygon points="23 7 16 12 23 17 23 7"/>
+            <rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+        </div>
+        <p class="upload-title">Drop video here or click to browse</p>
+        <p class="upload-sub">Supports: MP4, AVI, MOV, MKV, WEBM &bull; Max 500 MB</p>
+        <input type="file" id="vid-input" accept="video/*" style="display:none" />
+        <button class="btn btn-start btn-upload" id="btn-vid-browse">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Browse Video
+        </button>
+      </div>
+
+      <div class="processing-overlay" id="vid-progress" style="display:none">
+        <div class="progress-track">
+          <div class="progress-fill" id="vid-fill"></div>
+        </div>
+        <div class="progress-info">
+          <span id="vid-pct">Processing...</span>
+          <span id="vid-status-text">Analysing frames</span>
+        </div>
+        <div class="ai-loader">
+          <div class="ai-ring"></div>
+          <div class="ai-core">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-pane" id="vid-result" style="display:none">
+        <div class="result-toolbar">
+          <h3>Processed Video</h3>
+          <div class="result-actions">
+            <button class="btn-icon-sm" id="btn-vid-download" title="Download processed video">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download
+            </button>
+            <button class="btn-icon-sm btn-reset" id="btn-vid-reset">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+              Reset
+            </button>
+          </div>
+        </div>
+        <video id="vid-player" controls></video>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ─── RIGHT: Sidebar ──────────────────────────────────── -->
+  <aside class="sidebar">
+
+    <!-- Safety Status Widget -->
+    <div class="sidebar-block status-widget">
+      <div class="block-header">
+        <h4>Safety Status</h4>
+        <div class="pulse-dot" id="pulse-dot"></div>
+      </div>
+      <div class="status-gauge" id="status-gauge">
+        <div class="gauge-ring" id="gauge-ring">
+          <svg viewBox="0 0 120 120" class="gauge-svg">
+            <circle class="gauge-track" cx="60" cy="60" r="50"/>
+            <circle class="gauge-arc"   cx="60" cy="60" r="50" id="gauge-arc"/>
+          </svg>
+          <div class="gauge-center">
+            <div class="gauge-icon" id="gauge-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <div class="gauge-label" id="gauge-label">IDLE</div>
+          </div>
+        </div>
+        <div class="gauge-legend">
+          <div class="legend-item"><span class="legend-dot dot-safe"></span>Safe</div>
+          <div class="legend-item"><span class="legend-dot dot-warn"></span>Warning</div>
+          <div class="legend-item"><span class="legend-dot dot-danger"></span>Danger</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Alerts -->
+    <div class="sidebar-block">
+      <div class="block-header">
+        <h4>Active Alerts</h4>
+        <span class="alert-count" id="alert-count">0</span>
+      </div>
+      <div class="alert-feed" id="alert-list">
+        <div class="empty-msg">No active alerts</div>
+      </div>
+    </div>
+
+    <!-- Violation Log -->
+    <div class="sidebar-block log-block">
+      <div class="block-header">
+        <h4>Violation Log</h4>
+        <a href="/download_report" class="btn-icon-sm" title="Download CSV">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          CSV
+        </a>
+      </div>
+      <div class="log-scroll" id="log-list">
+        <div class="empty-msg">No violations logged yet</div>
+      </div>
+    </div>
+
+    <!-- Recent Snapshots -->
+    <div class="sidebar-block">
+      <div class="block-header">
+        <h4>Violation Snapshots</h4>
+        <span class="caption-text" id="snap-count">0 saved</span>
+      </div>
+      <div class="snap-grid" id="snapshot-grid">
+        <div class="empty-msg">No snapshots yet</div>
+      </div>
+    </div>
+
+  </aside>
+
+</main>
+
+<!-- ═══════════════════ TOAST CONTAINER ════════════════════ -->
+<div class="toasts" id="toast-container"></div>
+
+<!-- ═══════════════════ SCREENSHOT MODAL ═══════════════════ -->
+<div class="modal-backdrop" id="modal-backdrop" style="display:none">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Screenshot Captured</h3>
+      <button class="modal-x" id="modal-close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <img id="modal-img" alt="Screenshot" />
+    </div>
+    <div class="modal-foot">
+      <a id="modal-download" class="btn btn-start" download="screenshot.jpg">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download
+      </a>
+      <button class="btn btn-ghost" id="modal-close2">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ VIOLATION ALERT BANNER ═════════════ -->
+<div class="violation-banner" id="violation-banner" style="display:none">
+  <div class="banner-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  </div>
+  <span id="banner-text">VIOLATION DETECTED</span>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
